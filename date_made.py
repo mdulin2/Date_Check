@@ -1,29 +1,9 @@
+#Trademarked by Maxwell Dulin
+
 import requests
 import re
 from string import punctuation
 from libwayback import WaybackCrawler, WaybackRetriever
-import pywb
-
-#Tries to use the wayback method to look for the first usage of the page/site
-#Under construction...
-def last_resort(url_fun):
-    crawler = WaybackCrawler("www.sjtu.edu.cn")
-    crawler.parse(live=False)
-
-    # The `results` of crawler instance contains a dict data structure with
-    # a "year" number being the key and a list of page addresses being the value.
-
-    ret = crawler.results
-
-    # Based on the result of crawler, ie a specific page address, you can use
-    # retriever to download and save it in yor file system:
-
-    retriever = WaybackRetriever()
-
-    for year in ret:
-        for url in ret[year]:
-            retriever.save_page(url, "saved_file")
-
 
 #Takes out all html tags from the webpage
 def cleanhtml(raw_html):
@@ -35,11 +15,12 @@ def cleanhtml(raw_html):
 def strip_punctuation(s):
     return ''.join(c for c in s if c not in punctuation)
 
+#does the basic parsing for the page
 def setup_page(url):
     source = str(url.encode('UTF-8'))
     r = requests.get(source)
-    #site = "t t t Nov 5 '08"
     site = str(r.text.encode('UTF-8'))
+    #site = "Jan 05 2017"
     site = cleanhtml(site)
     return site
 
@@ -60,16 +41,17 @@ def get_date_alpha(url_fun,month_dict):
 
                 #ie.: 4 Jan 2017
                 if(before.isdigit() and (len(before) == 1 or len(before) == 2 or len(before) == 4)):
+
                     if(after.isdigit() and (len(after) == 1 or len(after) == 2 or len(after) == 4)):
-                        #print before, word, after
-                        date_list.append((before,word,after))
+                        print before, word, after
+                        date_list.append((str(before),str(word),str(after)))
 
                 #i.e: Jan 4 2017
                 elif(after.isdigit() and (len(after) ==1 or len(after) == 2 or len(after) == 4)):
                     possible_year = site[word_index+2]
                     if(possible_year.isdigit()):
                         #print word,after,possible_year
-                        date_list.append((word,after,possible_year))
+                        date_list.append((str(word),str(after),str(possible_year)))
     return date_list
     """
     Going to need a section here for dates like 1/2/3122/
@@ -104,15 +86,102 @@ def fix_number(value):
     value = value.replace("th","")
     return value
 
+#reformats the date with the number scheme to be tested
+def reformat_date(dates):
+    format_date = list()
+    for item in dates:
+        division = item.split("/")
+        format_date.append((division[0],division[1], division[2]))
+    return format_date
+
+#could do some checks based on dates...
 def date_finder(url_fun,month_dict):
     dates1 = get_date_alpha(url_fun,month_dict)
     dates2 = get_date_num(url_fun)
+    dates = reformat_date(dates2)
     # will be the wayback machine here at some point!
     # the wayback machine will be able to verify if the date is correct.
+    dates2 = [("1","2","2017"),("1","2","2017"),("1","2","2017")]
+    dates1,dates2 = combine_dates(dates1,dates2)
 
-    print find_date(dates1)
-    print find_date(dates2)
-    #print find_date(dates2)
+    if(len(dates1) < 2):
+        counter = len(dates)
+    else:
+        counter = 2
+
+    print
+    print "How do these dates look to you?"
+    for i in range(counter):
+        print dates1[i]
+
+    if(len(dates2) < 2):
+        counter = len(dates2)
+    else:
+        counter = 2
+    for i in range(counter):
+        print dates2[i]
+    
+    print "Go check the page for these dates! One of these is likely!"
+#Combines the two rows of dates
+def combine_dates(stack1,stack2):
+    dates1 = list()
+    dates2 = list()
+    for date in stack1:
+        if(is_valid_date(date,1)):
+            dates1.append(date)
+
+    for date in stack2:
+        if(is_valid_date(date,2)):
+            dates2.append(date)
+    return dates1,dates2
+
+#Checks to see if the date looks valid for a date on the website/article
+def is_valid_date(date,format_type):
+    """
+    format_type: (1) for the string dates(May 26,2017)
+    format_type: (2) for the integer datess(1/2/1222)
+    """
+
+    #for the values with strings
+    spot1 = date[0]
+    spot2 = date[1]
+    spot3 = date[2]
+
+    #string dates
+    if(format_type == 1):
+        if(ord(spot1[0]) >= ord('A') and ord('z') >= ord(spot1[0]) ):
+            spot2 =int(spot2)
+            if(spot2 > 31 or spot2 < 1):
+                return False
+
+        elif(ord(spot2[0]) >= ord('A') and ord('z') >= ord(spot2[0])):
+            spot1 = int(spot1)
+            if(spot1 > 31 or spot1 < 1):
+                return False
+        else:
+            return False
+    #integer dates
+    elif(format_type == 2):
+        spot1 = int(spot1)
+        spot2 = int(spot2)
+        if(spot1 <= 12 and spot1 >= 1):
+            if(spot2 > 31):
+                return False
+        elif(spot2 <= 12 and spot2 >=1):
+            if(spot1 > 31):
+                return False
+        else:
+            return False
+
+    #Checks to see if the year is valid
+    spot3 = int(spot3)
+    if((spot3 <= 2019 and spot3 >= 1939) or
+        (spot3 <= 19 and spot3 >= 00) or
+        (spot3 <= 99 and spot3 >40)):
+        return True
+    return False
+    #for the values with just values
+
 
 #Check these urls to make sure nothing has been broken!
 def test_urls(month_dict):
@@ -129,6 +198,8 @@ def test_urls(month_dict):
         assert(len(dates) > 0)
     print("Finish Tests!")
 
+#Wil have a working wayback machine API in order to find the first date that this
+#website page appeared on the internet.
 def wayback_view(url_fun):
     #url = "https://web.archive.org/web/*/" + url_fun
     #source = str(url.encode('UTF-8'))
@@ -137,6 +208,7 @@ def wayback_view(url_fun):
     #site = str(r.text.encode('UTF-8'))
     #site = cleanhtml(site)
     pass
+
 def main():
     month_dict = dict()
     month_dict["January"] = ("Jan",31,1)
@@ -144,7 +216,7 @@ def main():
     month_dict["March"] = ("Mar",31,3)
     month_dict["April"] = ("Apr",30,4)
     month_dict["May"] = ("May",31,5)
-    month_dict["June"] = ("June",31,6)
+    month_dict["June"] = ("Jun",31,6)
     month_dict["July"] = ("Jul",31,7)
     month_dict["August"] = ("Aug",31,8)
     month_dict["September"] = ("Sept",30,9)
@@ -152,11 +224,14 @@ def main():
     month_dict["November"] = ("Nov",30,11)
     month_dict["December"] = ("Dec",31,12)
 
-    wayback_view("google.com")
+
+    #print(is_valid_date(['May','1','00'],1))
     #print(get_date_num('http://www.vh1.com/shows/americas-next-top-model'))
+    #test_urls(month_dict)
     #url = str(raw_input("Give me an url that I should check: "))
-    #last_resort("https://moxie.org/blog/")
-    #dates = date_finder(url,month_dict)
+    url = "https://stackoverflow.com/questions/16908186/python-check-if-list-items-are-numbers"
+    date_finder(url,month_dict)
+
 
 
 main()
